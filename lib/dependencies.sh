@@ -211,9 +211,11 @@ npm_node_modules() {
       echo "Installing node modules (package.json)"
     fi
 
-    if [ "$ci"  ] && [ -e "$BUILD_DIR/package-lock.json" ]; then
+    if [ "$ci" == true ] && [ -e "$BUILD_DIR/package-lock.json" ]; then
+      echo "npm ci"
       monitor "npm-install" npm ci --production="$production" --unsafe-perm --userconfig "$build_dir/.npmrc" 2>&1
     else
+      echo "npm install"
       monitor "npm-install" npm install --production="$production" --unsafe-perm --userconfig "$build_dir/.npmrc" 2>&1
     fi
   else
