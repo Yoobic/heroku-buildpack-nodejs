@@ -15,34 +15,9 @@ testFlatmapStream() {
   assertCapturedError
 }
 
-testBuildScriptWarning() {
-  local env_dir=$(mktmpdir)
-  local metrics_log=$(mktemp)
-  echo "$metrics_log" > $env_dir/BUILDPACK_LOG_FILE
-
-  compile "build-script" "$(mktmpdir)" $env_dir
-
-  # Without opting in, having a build script will display a warning
-  assertCaptured "On March 11, 2019 Heroku will begin executing the \"build\" script defined in package.json"
-  assertCaptured "https://help.heroku.com/P5IMU3MP/heroku-node-js-build-script-change-faq"
-
-  # make sure metrics are being captured as we expect
-  assertFileContains "count#buildpack.nodejs.affected-by-build-change=1" "$metrics_log"
-  assertFileNotContains "affected-by-build-change-opted-in" "$metrics_log"
-
-  # We shouldn't see the opt-in success message
-  assertNotCaptured "Opting in to new default build script behavior"
-  assertCapturedSuccess
-}
-
 testBuildScriptBehavior() {
-  # opt in to new build script behavior
-  cache=$(mktmpdir)
-  env_dir=$(mktmpdir)
-  echo "true" > $env_dir/NEW_BUILD_SCRIPT_BEHAVIOR
-
   # The 'build' script is run by default
-  compile "build-script" $cache $env_dir
+  compile "build-script"
   assertCaptured "Running build"
   assertCapturedSuccess
 
@@ -53,27 +28,8 @@ testBuildScriptBehavior() {
   assertCapturedSuccess
 }
 
-testBuildScriptOptIn() {
-  local env_dir=$(mktmpdir)
-  local metrics_log=$(mktemp)
-  echo "$metrics_log" > $env_dir/BUILDPACK_LOG_FILE
-
-  compile "build-script-opt-in" "$(mktmpdir)" $env_dir
-  assertCaptured "Running build"
-  assertCaptured "Opting in to new default build script behavior"
-  # We shouldn't see this warning once they opt-in
-  assertNotCaptured "Warning: On March 11, 2019 Heroku will begin executing the \"build\" script defined in package.json by default"
-  assertNotCaptured "https://help.heroku.com/P5IMU3MP/heroku-node-js-build-script-change-faq"
-
-  # make sure metrics are being captured as we expect
-  assertFileContains "count#buildpack.nodejs.affected-by-build-change=1" "$metrics_log"
-  assertFileContains "count#buildpack.nodejs.affected-by-build-change-opted-in=1" "$metrics_log"
-
-  assertCapturedSuccess
-}
-
-testBuildScriptOptInYarn() {
-  compile "build-script-opt-in-yarn"
+testBuildScriptYarn() {
+  compile "build-script-yarn"
   assertCaptured "Running build (yarn)"
   assertCaptured "build hook message"
   assertCapturedSuccess
@@ -644,7 +600,6 @@ testNpmVersionSpecific() {
 
 testFailingBuild() {
   compile "failing-build"
-  assertCaptured "Building dependencies"
   assertCaptured "Build failed"
   assertCaptured "We're sorry this build is failing"
   assertNotCaptured "Checking startup method"
@@ -1088,11 +1043,9 @@ testMemoryMetrics() {
 }
 
 testBuildMetaData() {
-  env_dir=$(mktmpdir)
   local log_file=$(mktemp)
-  echo "$log_file" > $env_dir/BUILDPACK_LOG_FILE
 
-  compile "pre-post-build-scripts" "$(mktmpdir)" $env_dir
+  BUILDPACK_LOG_FILE="$log_file" compile "pre-post-build-scripts"
 
   # build info
   assertFileContains "node-package-manager=npm" $log_file
@@ -1129,7 +1082,7 @@ testBuildMetaData() {
 
   # erase the log file
   echo "" > $log_file
-  compile "yarn" "$(mktmpdir)" $env_dir
+  BUILDPACK_LOG_FILE="$log_file" compile "yarn"
 
   assertFileContains "node-package-manager=yarn" $log_file
   assertFileContains "has-node-lock-file=true" $log_file
@@ -1138,6 +1091,19 @@ testBuildMetaData() {
   assertFileContains "install-yarn-binary-memory=" $log_file
   assertFileContains "install-yarn-binary-time=" $log_file
   assertFileContains "node-build-success=true" $log_file
+}
+
+testFailingBuildMetaData() {
+  local log_file=$(mktemp)
+
+  BUILDPACK_LOG_FILE="$log_file" compile "bad-json"
+  assertFileContains "failure=invalid-package-json" $log_file
+  assertCapturedError
+
+  echo "" > $log_file
+  BUILDPACK_LOG_FILE="$log_file" compile "yarn-lockfile-out-of-date"
+  assertFileContains "failure=outdated-yarn-lockfile" $log_file
+  assertCapturedError
 }
 
 testPropagateAppUUID() {

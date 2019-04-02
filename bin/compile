@@ -50,8 +50,8 @@ source "$BP_DIR/lib/uuid.sh"
 source "$BP_DIR/lib/kvstore.sh"
 # shellcheck source=lib/metadata.sh
 source "$BP_DIR/lib/metadata.sh"
-# shellcheck source=lib/build-data.sh
-source "$BP_DIR/lib/build-data.sh"
+# shellcheck source=lib/builddata.sh
+source "$BP_DIR/lib/builddata.sh"
 
 export PATH="$BUILD_DIR/.heroku/node/bin:$BUILD_DIR/.heroku/yarn/bin":$PATH
 
@@ -63,6 +63,14 @@ build_start_time=$(nowms)
 ### Handle errors
 
 handle_failure() {
+  bright_header "Change to Node.js build process"
+  echo "       Heroku has begun executing the \"build\" script defined in package.json"
+  echo "       during Node.js builds."
+  echo ""
+  echo "       Read more: https://devcenter.heroku.com/changelog-items/1573"
+  echo ""
+
+  meta_set "node-build-success" "false"
   header "Build failed"
   fail_yarn_outdated "$LOG_FILE"
   fail_yarn_lockfile_outdated "$LOG_FILE"
@@ -74,12 +82,13 @@ handle_failure() {
   warn_angular_resolution "$LOG_FILE"
   warn_missing_devdeps "$LOG_FILE" "$BUILD_DIR"
   warn_econnreset "$LOG_FILE"
+  log_meta_data >> "$BUILDPACK_LOG_FILE"
   failure_message | output "$LOG_FILE"
 }
 trap 'handle_failure' ERR
 
 ### Initalize metadata store
-bd_create "$CACHE_DIR"
+meta_create "$CACHE_DIR"
 
 ### Check initial state
 
@@ -99,10 +108,6 @@ fail_invalid_package_json "$BUILD_DIR"
 fail_multiple_lockfiles "$BUILD_DIR"
 warn_prebuilt_modules "$BUILD_DIR"
 warn_missing_package_json "$BUILD_DIR"
-
-### Behavior flags
-[ ! "$NEW_BUILD_SCRIPT_BEHAVIOR" ] && NEW_BUILD_SCRIPT_BEHAVIOR=$(read_json "$BUILD_DIR/package.json" ".[\"heroku-run-build-script\"]")
-
 
 ### Compile
 
@@ -134,13 +139,13 @@ install_bins() {
   npm_engine=$(read_json "$BUILD_DIR/package.json" ".engines.npm")
   yarn_engine=$(read_json "$BUILD_DIR/package.json" ".engines.yarn")
 
-  bd_set "node-version-request" "$node_engine"
-  bd_set "npm-version-request" "$npm_engine"
-  bd_set "yarn-version-request" "$yarn_engine"
+  meta_set "node-version-request" "$node_engine"
+  meta_set "npm-version-request" "$npm_engine"
+  meta_set "yarn-version-request" "$yarn_engine"
 
-  bd_set "node-version-request" "$node_engine"
-  bd_set "npm-version-request" "$npm_engine"
-  bd_set "yarn-version-request" "$yarn_engine"
+  meta_set "node-version-request" "$node_engine"
+  meta_set "npm-version-request" "$npm_engine"
+  meta_set "yarn-version-request" "$yarn_engine"
 
   if [ -n "$iojs_engine" ]; then
     echo "engines.iojs (package.json):  $iojs_engine (iojs)"
@@ -166,7 +171,7 @@ install_bins() {
     monitor "install-npm-binary" install_npm "$npm_engine" "$BUILD_DIR/.heroku/node" $NPM_LOCK
     node_version="$(node --version)"
     mcount "version.node.$node_version"
-    bd_set "node-version" "$node_version"
+    meta_set "node-version" "$node_version"
   fi
 
   # Download yarn if there is a yarn.lock file or if the user
@@ -178,10 +183,10 @@ install_bins() {
 
   if $YARN; then
     mcount "version.yarn.$(yarn --version)"
-    bd_set "yarn-version" "$(yarn --version)"
+    meta_set "yarn-version" "$(yarn --version)"
   else
     mcount "version.npm.$(npm --version)"
-    bd_set "npm-version" "$(npm --version)"
+    meta_set "npm-version" "$(npm --version)"
   fi
 
   warn_old_npm
@@ -232,7 +237,7 @@ restore_cache() {
   fi
 
   mcount "cache.$cache_status"
-  bd_set "cache-status" "$cache_status"
+  meta_set "cache-status" "$cache_status"
 }
 
 restore_cache | output "$LOG_FILE"
@@ -256,25 +261,12 @@ build_dependencies() {
 
   mtime "modules.time.cache.$cache_status" "${start}"
 
-  if [[ "$NEW_BUILD_SCRIPT_BEHAVIOR" = true ]]; then
-    if $YARN; then
-      header "Build"
-    else
-      # npm already prints a new line after the install
-      # without skipping the newline there's an awkward double line break
-      header_skip_newline "Build"
-    fi
-    mcount "build-script.new-behavior"
-    run_build_script "$BUILD_DIR"
-  else
-    mcount "build-script.legacy-behavior"
-    run_if_present "$BUILD_DIR" 'heroku-postbuild'
-  fi
-
+  header "Build"
+  run_build_script "$BUILD_DIR"
   log_build_scripts "$BUILD_DIR"
 }
 
-header "Building dependencies" | output "$LOG_FILE"
+header "Installing dependencies" | output "$LOG_FILE"
 build_dependencies | output "$LOG_FILE"
 
 cache_build() {
@@ -315,7 +307,7 @@ summarize_build() {
   fi
 
   mmeasure 'modules.size' "$(measure_size)"
-  bd_set "node-modules-size" "$(measure_size)"
+  meta_set "node-modules-size" "$(measure_size)"
 }
 
 install_plugin "$BP_DIR" "$BUILD_DIR"
@@ -323,15 +315,18 @@ install_plugin "$BP_DIR" "$BUILD_DIR"
 header "Build succeeded!" | output "$LOG_FILE"
 mcount "compile"
 summarize_build | output "$LOG_FILE"
-bd_set "node-build-success" "true"
-bd_time "build-time" "$build_start_time"
+meta_set "node-build-success" "true"
+meta_time "build-time" "$build_start_time"
 
 warn_no_start "$BUILD_DIR"
 warn_unmet_dep "$LOG_FILE"
 warn_old_npm_lockfile $NPM_LOCK
 
-warn_build_script_behavior_change "$NEW_BUILD_SCRIPT_BEHAVIOR" "$BUILD_DIR" | output "$LOG_FILE"
-warn_build_script_behavior_opt_in "$NEW_BUILD_SCRIPT_BEHAVIOR" | output "$LOG_FILE"
-log_build_script_opt_in "$NEW_BUILD_SCRIPT_BEHAVIOR" "$BUILD_DIR"
+bright_header "Change to Node.js build process"
+echo "       Heroku has begun executing the \"build\" script defined in package.json"
+echo "       during Node.js builds."
+echo ""
+echo "       Read more: https://devcenter.heroku.com/changelog-items/1573"
+echo ""
 
-log_build_data >> "$BUILDPACK_LOG_FILE"
+log_meta_data >> "$BUILDPACK_LOG_FILE"

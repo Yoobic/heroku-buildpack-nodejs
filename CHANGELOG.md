@@ -2,9 +2,33 @@
 
 ## master
 
+## v143 (2019-03-28)
+- Internal logging changes (#637, #631, #630)
+
+## v142 (2019-03-11)
+- Add temporary warning about "run build" when the build fails as well (#639)
+
+## v141 (2019-03-11)
+- Add temporary warning about "run build" change to log output (#636)
+
+## v140 (2019-03-11)
+- Run the build script by default (#628)
+
+## v139 (2019-03-04)
+- Make breaking change warning header brighter (#627)
+
+## v138 (2019-02-20)
+- Add new Build header (#625)
+- Fix yarn run error when script is empty string (#624)
+
+## v137 (2019-02-14)
+- Internal logging changes (#620, #618, #621)
+- Detect build scripts even when they are empty (#617)
+
+## v136 (2019-02-09)
 - Add warning for the upcoming run build change (#616)
 
-## v135 (2018-02-06)
+## v135 (2019-02-06)
 
 - Fix bug where failing builds on CI would not fail CI (#613)
 - Internal logging changes (#596, #600)
@@ -82,6 +106,7 @@
 ## v119 (2018-02-28)
 
 - Install and prune devDependencies by default (#519)
+- [Breaking] Stop setting the env var `NPM_CONFIG_PRODUCTION=true` by default
 
 ## v118 (2018-02-02)
 

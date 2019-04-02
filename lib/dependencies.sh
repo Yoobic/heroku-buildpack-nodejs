@@ -60,41 +60,6 @@ run_build_script() {
   fi
 }
 
-warn_build_script_behavior_opt_in() {
-  local opted_in="$1"
-  if [[ "$opted_in" = true ]]; then
-    header "Opting in to new default build script behavior"
-    echo "You have set \"heroku-run-build-script\"=true in your package.json"
-    echo "Your app will be unaffected by the change on March 11, 2019"
-    echo ""
-    mcount "build-change-opt-in"
-  fi
-}
-
-warn_build_script_behavior_change() {
-  local opted_in="$1"
-  local build_dir="$2"
-  local has_build_script has_heroku_build_script
-
-  has_build_script=$(read_json "$build_dir/package.json" ".scripts.build")
-  has_heroku_build_script=$(read_json "$build_dir/package.json" ".scripts[\"heroku-postbuild\"]")
-
-  if [[ -z "$has_heroku_build_script" ]] && [[ -n "$has_build_script" ]] && [[ "$opted_in" != "true" ]]; then
-    header "Change to Node.js build process"
-    echo "On March 11, 2019 Heroku will begin executing the \"build\" script defined in package.json"
-    echo "by default. This application may be affected by this change."
-    echo ""
-    echo "To make this transition easier, we've published a tool that will automatically" 
-    echo "update your app for you. You can run it with one command in your app's"
-    echo "root directory:"
-    echo ""
-    echo "$ npx @heroku/update-node-build-script"
-    echo ""
-    echo "Please see https://help.heroku.com/P5IMU3MP/heroku-node-js-build-script-change-faq for more information"
-    echo ""
-  fi
-}
-
 log_build_scripts() {
   local build heroku_prebuild heroku_postbuild postinstall
   local build_dir=${1:-}
@@ -104,15 +69,15 @@ log_build_scripts() {
   heroku_postbuild=$(read_json "$build_dir/package.json" ".scripts[\"heroku-postbuild\"]")
   postinstall=$(read_json "$build_dir/package.json" ".scripts[\"heroku-postbuild\"]")
 
-  bd_set "build-script" "$build"
-  bd_set "postinstall-script" "$postinstall"
-  bd_set "heroku-prebuild-script" "$heroku_prebuild"
-  bd_set "heroku-postbuild-script" "$heroku_prebuild"
+  meta_set "build-script" "$build"
+  meta_set "postinstall-script" "$postinstall"
+  meta_set "heroku-prebuild-script" "$heroku_prebuild"
+  meta_set "heroku-postbuild-script" "$heroku_prebuild"
 
-  bd_set "build-script" "$build"
-  bd_set "postinstall-script" "$postinstall"
-  bd_set "heroku-prebuild-script" "$heroku_prebuild"
-  bd_set "heroku-postbuild-script" "$heroku_prebuild"
+  meta_set "build-script" "$build"
+  meta_set "postinstall-script" "$postinstall"
+  meta_set "heroku-prebuild-script" "$heroku_prebuild"
+  meta_set "heroku-postbuild-script" "$heroku_prebuild"
 
   if [ -n "$build" ]; then
     mcount "scripts.build"
@@ -178,20 +143,20 @@ yarn_prune_devdependencies() {
 
   if [ "$NODE_ENV" == "test" ]; then
     echo "Skipping because NODE_ENV is 'test'"
-    bd_set "skipped-prune" "true"
+    meta_set "skipped-prune" "true"
     return 0
   elif [ "$NODE_ENV" != "production" ]; then
     echo "Skipping because NODE_ENV is not 'production'"
-    bd_set "skipped-prune" "true"
+    meta_set "skipped-prune" "true"
     return 0
   elif [ -n "$YARN_PRODUCTION" ]; then
     echo "Skipping because YARN_PRODUCTION is '$YARN_PRODUCTION'"
-    bd_set "skipped-prune" "true"
+    meta_set "skipped-prune" "true"
     return 0
   else 
     cd "$build_dir" || return
     monitor "yarn-prune" yarn install --frozen-lockfile --ignore-engines --ignore-scripts --prefer-offline 2>&1
-    bd_set "skipped-prune" "false"
+    meta_set "skipped-prune" "false"
   fi
 }
 
@@ -256,15 +221,15 @@ npm_prune_devdependencies() {
 
   if [ "$NODE_ENV" == "test" ]; then
     echo "Skipping because NODE_ENV is 'test'"
-    bd_set "skipped-prune" "true"
+    meta_set "skipped-prune" "true"
     return 0
   elif [ "$NODE_ENV" != "production" ]; then
     echo "Skipping because NODE_ENV is not 'production'"
-    bd_set "skipped-prune" "true"
+    meta_set "skipped-prune" "true"
     return 0
   elif [ -n "$NPM_CONFIG_PRODUCTION" ]; then
     echo "Skipping because NPM_CONFIG_PRODUCTION is '$NPM_CONFIG_PRODUCTION'"
-    bd_set "skipped-prune" "true"
+    meta_set "skipped-prune" "true"
     return 0
   elif [ "$npm_version" == "5.3.0" ]; then
     mcount "skip-prune-issue-npm-5.3.0"
@@ -273,7 +238,7 @@ npm_prune_devdependencies() {
     echo ""
     echo "You can silence this warning by updating to at least npm 5.7.1 in your package.json"
     echo "https://devcenter.heroku.com/articles/nodejs-support#specifying-an-npm-version"
-    bd_set "skipped-prune" "true"
+    meta_set "skipped-prune" "true"
     return 0
   elif [ "$npm_version" == "5.6.0" ] ||
        [ "$npm_version" == "5.5.1" ] ||
@@ -288,11 +253,11 @@ npm_prune_devdependencies() {
     echo ""
     echo "You can silence this warning by updating to at least npm 5.7.1 in your package.json"
     echo "https://devcenter.heroku.com/articles/nodejs-support#specifying-an-npm-version"
-    bd_set "skipped-prune" "true"
+    meta_set "skipped-prune" "true"
     return 0
   else
     cd "$build_dir" || return
     monitor "npm-prune" npm prune --userconfig "$build_dir/.npmrc" 2>&1
-    bd_set "skipped-prune" "false"
+    meta_set "skipped-prune" "false"
   fi
 }
